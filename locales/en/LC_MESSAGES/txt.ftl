@@ -51,6 +51,6 @@ button-quarter = Quarter
 button-half_year = Half year
 button-year = Year
 
-setting-currency = Choose the currency you want to track your finances in.
-setting-language = You can change the language to:
-setting-money_limit = Finally, set the monthly limit:
+pre_setting_choice-currency = Choose the currency you want to track your finances in.
+pre_setting_choice-language = You can change the language to:
+pre_setting_choice-money_limit = Finally, set the monthly limit:

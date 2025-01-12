@@ -8,6 +8,10 @@ class InitStates(StatesGroup):
 
 class SettingsStates(StatesGroup):
     select_param = State()
+    language = State()
+    money_limit = State()
+    currency = State()
+    confirm_params = State
 
 
 class PreSettingsStates(StatesGroup):

@@ -10,12 +10,12 @@ from fluentogram import TranslatorRunner, TranslatorHub
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from custom_types.types import DefaultMoneyUnit
-from database.enums import ExpensesEnum, MonetaryCurrenciesEnum, TimeIntervalsEnum
+from database.enums import ExpensesEnum, MonetaryCurrenciesEnum, TimeIntervalsEnum, SettingsParamsEnum
 from database.requests import UserDBRequests, SettingsDBRequests
 from keyboards.main_menu import load_bot_command_menu
 from services.categories_handler import compute_money_value_with_timestamps, compute_expected_costs
 from services.check_actually_currencies import get_valid_expenses
-from validation.db_models import ValidCategoryModel, ValidSettingsParams
+from validation.db_models import ValidCategoryModel, ValidSettingsParams, ValidSettingsModel
 
 
 async def get_message_start_win(dialog_manager: DialogManager, event_from_user: User,
@@ -51,7 +51,7 @@ async def get_language_choice_win(dialog_manager: DialogManager, i18n: Translato
 
     dialog_manager.dialog_data["language_code"] = radio.get_checked()
     i18n: TranslatorRunner = _translator_hub.get_translator_by_locale(locale=radio.get_checked())
-    message = i18n.setting.language()
+    message = i18n.pre_setting_choice.language()
     button_back = i18n.button.back()
     button_confirm = i18n.button.confirm()
 
@@ -76,7 +76,7 @@ async def get_currency_choice_win(dialog_manager: DialogManager, _translator_hub
 
     dialog_manager.dialog_data["currency_type"] = radio.get_checked()
 
-    message = i18n.setting.currency()
+    message = i18n.pre_setting_choice.currency()
     button_back = i18n.button.back()
     button_confirm = i18n.button.confirm()
 
@@ -87,9 +87,9 @@ async def get_currency_choice_win(dialog_manager: DialogManager, _translator_hub
 async def get_default_money_value_win(dialog_manager: DialogManager, _translator_hub: TranslatorHub, **kwargs):
     settings: ValidSettingsParams = dialog_manager.start_data.get("user_settings")
     dialog_manager.dialog_data.setdefault("money_value", settings.money_limits.get(datetime.now().month))
-    currency_type = dialog_manager.dialog_data.get("currency_type")
-    money_value = dialog_manager.dialog_data.get("money_value")
-    language_code = dialog_manager.dialog_data.get("language_code")
+    currency_type = dialog_manager.dialog_data.get("currency_type", dialog_manager.start_data.get("currency_type"))
+    money_value = dialog_manager.dialog_data.get("money_value", dialog_manager.start_data.get("money_value"))
+    language_code = dialog_manager.dialog_data.get("language_code", dialog_manager.start_data.get("language_code"))
     i18n = _translator_hub.get_translator_by_locale(locale=language_code)
 
     is_default = (False, True)[money_value is None]
@@ -221,9 +221,44 @@ async def get_category_period_buttons(dialog_manager: DialogManager, i18n: Trans
     return time_periods
 
 
-async def get_settings_params(dialog_manager: DialogManager, i18n: TranslatorRunner, **kwargs):
+async def get_setting_language(dialog_manager: DialogManager, i18n: TranslatorRunner,
+                               db_session: async_sessionmaker, **kwargs):
+    message = i18n.pre_setting_choice.language()
+    button_confirm = i18n.buttom.confirm()
+    return {"message": message, "button_confirm": button_confirm}
+
+
+async def get_setting_money_limit(dialog_manager: DialogManager, i18n: TranslatorRunner,
+                                  db_session: async_sessionmaker, **kwargs):
+    user_settings: ValidSettingsParams = dialog_manager.start_data.get("user_settings")
+    last_money_limit = tuple(user_settings.money_limits.values())[-1]
+    current_money_value = dialog_manager.dialog_data.get("money_value", last_money_limit)
+
+    message = i18n.message.confirm_money_value(money_value=current_money_value,
+                                               currency=user_settings.monetary_currency)
+    button_confirm = i18n.button.confirm()
+    return {"message": message, "button_confirm": button_confirm}
+
+
+async def get_setting_money_currency(dialog_manager: DialogManager, i18n: TranslatorRunner,
+                                     db_session: async_sessionmaker, **kwargs):
+    message = i18n.message.pre_settings_choice.currency()
+    button_confirm = i18n.button.confirm()
+    return {"message": message, "button_confirm": button_confirm}
+
+
+async def get_settings_params(dialog_manager: DialogManager, db_session: async_sessionmaker,
+                              _translator_hub: TranslatorHub, **kwargs):
+    standard_language_code = dialog_manager.start_data.get("language_code")
+    new_language_code = dialog_manager.dialog_data.get("language_code", standard_language_code)
+    i18n = _translator_hub.get_translator_by_locale(new_language_code)
+    dialog_manager.dialog_data["db_session"] = db_session
+
     message = i18n.message.settings_menu()
-    return {"message": message, "one": "One", "two": "Two", "three": "Three"}
+    confirm_button = i18n.button.confirm()
+    data = {element.name: i18n.get(f"setting-{element.value}") for element in SettingsParamsEnum}
+
+    return {"message": message, "confirm_button": confirm_button, **data}
 
 
 

@@ -56,7 +56,13 @@ async def get_aliases_process(message: Message, dialog_manager: DialogManager, d
 @router.message(Command("settings"))
 async def change_bot_settings_process(message: Message, dialog_manager: DialogManager, db_session: async_sessionmaker,
                                       i18n: TranslatorRunner):
-    await dialog_manager.start(SettingsStates.select_param)
+    user_settings = await SettingsDBRequests.get_params(db_session, message.from_user.id)
+    data = {"user_settings": user_settings, "i18n": i18n, "is_settings": False,
+            "money_value": tuple(user_settings.money_limits.values())[-1],
+            "language_code": user_settings.language_code,
+            "currency_type": user_settings.monetary_currency,
+            "db_session": db_session}
+    await dialog_manager.start(SettingsStates.select_param, data=data)
 
 
 # Возможно заглушка, пересмотреть варианты возврата пользователя обратно - в рабочий диалог

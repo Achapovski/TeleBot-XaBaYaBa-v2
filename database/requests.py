@@ -38,9 +38,9 @@ class SettingsDBRequests:
     async def update_params(cls, session_maker: async_sessionmaker, user_id: int, **kwargs) -> None:
         if money_limit := kwargs.get("money_limits"):
             month = datetime.now().month
-            kwargs["money_limits"] = default_factory(money_limit, default_month=month)
             req = await cls.get_params(session_maker=session_maker, user_id=user_id)
-            kwargs["money_limits"].update(req.money_limits)
+            kwargs["money_limits"] = req.money_limits
+            kwargs["money_limits"].update(default_factory(money_limit, default_month=month))
 
         async with session_maker as session:
             stmt = update(cls.model).values(settings_options=ValidSettingsParams(**kwargs).model_dump()).where(

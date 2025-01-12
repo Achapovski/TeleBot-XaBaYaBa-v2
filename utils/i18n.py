@@ -27,6 +27,8 @@ def create_translator_hub() -> TranslatorHub:
                     locale="en-US",
                     filenames=[
                         "locales/en/LC_MESSAGES/txt.ftl",
+                        "locales/en/LC_MESSAGES/additional.ftl",
+                        "locales/en/LC_MESSAGES/notifications.ftl",
                         "locales/en/LC_MESSAGES/main_menu.ftl"
                     ]
                 )

@@ -51,6 +51,7 @@ button-quarter = За квартал
 button-half_year = За полугодие
 button-year = За год
 
-setting-currency = Выберите валюту, в которой хотите отслеживать ваши финансы.
-setting-language = Вы можете сменить язык на:
-setting-money_limit = Осталось установить месячный лимит:
+pre_setting_choice-currency = Выберите валюту, в которой хотите отслеживать ваши финансы.
+pre_setting_choice-language = Вы можете сменить язык на:
+pre_setting_choice-money_limit = Осталось установить месячный лимит:
+pre_setting_change-money_limit = Изменить месячный лимит:

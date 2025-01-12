@@ -28,6 +28,8 @@ class MoneyValueInputFactory:
                                         dialog_manager: DialogManager, *args, **kwargs):
         money_value = define_money_unit(message.text)
         dialog_manager.current_context().dialog_data["money_value"] = money_value.__str__()
+        # if dialog_manager.start_data.get("is_settings"):
+        #     await dialog_manager.done()
 
     @staticmethod
     async def money_value_input_error(message: Message, widget: ManagedTextInput,

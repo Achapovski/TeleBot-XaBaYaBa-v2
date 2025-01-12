@@ -3,3 +3,4 @@ alembic.ini
 .env
 .idea
 telebot_venv
+__pycache__

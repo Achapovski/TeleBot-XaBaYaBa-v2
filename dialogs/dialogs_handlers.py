@@ -2,12 +2,11 @@ from aiogram.types import CallbackQuery
 from aiogram_dialog.widgets.kbd import Button, ManagedRadio
 from aiogram_dialog.manager.manager import DialogManager
 from fluentogram import TranslatorRunner
-from unicodedata import category
 
-from database.enums import ExpensesEnum, MonetaryCurrenciesEnum
-from database.requests import AliasDBRequests, SettingsDBRequests, UserDBRequests
-from dialogs.dialogs_states import PreSettingsStates, WorkStates
-from services.check_actually_currencies import get_actually_currencies, get_valid_expenses
+from database.enums import ExpensesEnum, MonetaryCurrenciesEnum, SettingsParamsEnum
+from database.requests import AliasDBRequests, SettingsDBRequests
+from dialogs.dialogs_states import PreSettingsStates, WorkStates, SettingsStates
+from services.check_actually_currencies import get_valid_expenses
 from validation.db_models import CategoryDTO, ValidCategoryModel
 
 
@@ -28,10 +27,6 @@ async def continue_with_default(callback: CallbackQuery, button: Button, dialog_
     await dialog_manager.start(WorkStates.add_category)
 
 
-async def continue_dialog(callback: CallbackQuery, button: Button, dialog_manager: DialogManager):
-    await dialog_manager.next()
-
-
 async def set_language_default(callback: CallbackQuery, button: Button, dialog_manager: DialogManager):
     i18n: TranslatorRunner = dialog_manager.start_data.get("i18n")
     radio: ManagedRadio = dialog_manager.find("radio_lang")
@@ -41,6 +36,8 @@ async def set_language_default(callback: CallbackQuery, button: Button, dialog_m
     message = i18n.get("select-language", language=full_language_code)
 
     await callback.answer(message)
+    if dialog_manager.start_data.get("is_settings"):
+        return await dialog_manager.done()
     await dialog_manager.next()
 
 
@@ -64,6 +61,7 @@ async def lets_work_handler(callback: CallbackQuery, button: Button, dialog_mana
     await SettingsDBRequests.update_params(session_maker=db_session, user_id=callback.from_user.id,
                                            money_limits=money_value, language_code=language_code,
                                            monetary_currency=currency_type)
+
     await dialog_manager.done()
     await dialog_manager.start(WorkStates.add_category, data={"language_code": language_code})
 
@@ -123,3 +121,39 @@ async def edit_currency_type(callback: CallbackQuery, button: Button, dialog_man
     dialog_manager.current_context().dialog_data["actually_categories"] = actually_categories
     dialog_manager.current_context().dialog_data["current_currency"] = selected_currency
     await callback.answer()
+
+
+async def edit_settings_param(callback: CallbackQuery, button: Button, dialog_manager: DialogManager):
+    db_session = dialog_manager.dialog_data.get("db_session")
+    user_settings = await SettingsDBRequests.get_params(db_session, callback.from_user.id)
+
+    dialog_manager.dialog_data.setdefault("language_code", user_settings.language_code)
+    dialog_manager.dialog_data.setdefault("currency_type", user_settings.monetary_currency)
+    dialog_manager.dialog_data.setdefault("money_value", tuple(user_settings.money_limits.values())[-1])
+
+    match button.widget_id:
+        case SettingsParamsEnum.language.value:
+            await dialog_manager.switch_to(SettingsStates.language)
+        case SettingsParamsEnum.money_limit.value:
+            await dialog_manager.switch_to(SettingsStates.money_limit)
+        case SettingsParamsEnum.default_currency.name:
+            await dialog_manager.switch_to(SettingsStates.currency)
+    await callback.answer(button.widget_id)
+
+
+async def edit_language_param(callback: CallbackQuery, button: Button, dialog_manager: DialogManager):
+    language_code: ManagedRadio = dialog_manager.find("radio_lang")
+    if selected_language := language_code.get_checked():
+        dialog_manager.dialog_data["language_code"] = selected_language
+    await dialog_manager.switch_to(SettingsStates.select_param)
+
+
+async def edit_money_limit_param(callback: CallbackQuery, button: Button, dialog_manager: DialogManager):
+    await dialog_manager.switch_to(SettingsStates.select_param)
+
+
+async def edit_currency_param(callback: CallbackQuery, button: Button, dialog_manager: DialogManager):
+    monetary_currency: ManagedRadio = dialog_manager.find("radio_curr")
+    if selected_currency := monetary_currency.get_checked():
+        dialog_manager.dialog_data["currency_type"] = selected_currency
+    await dialog_manager.switch_to(SettingsStates.select_param)

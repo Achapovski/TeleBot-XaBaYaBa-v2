@@ -1,24 +1,25 @@
 from aiogram.enums import ParseMode
 
-from database.enums import ExpensesEnum, MonetaryCurrenciesEnum
+from database.enums import ExpensesEnum, MonetaryCurrenciesEnum, SettingsParamsEnum, LanguageCodesEnum
 from dialogs.dialogs_getters import (get_message_start_win, get_pre_settings_win,
                                      get_language_choice_win, get_currency_choice_win,
                                      get_default_money_value_win, lets_work, get_user_categories, get_category_alias,
                                      confirm_category_alias, get_category_list, get_category_period_buttons,
-                                     get_settings_params)
+                                     get_settings_params, get_setting_language, get_setting_money_currency,
+                                     get_setting_money_limit)
 from dialogs.dialog_factories import MoneyValueInputFactory, CategoryProcessingFactory, AliasProcessingFactory
 
 from aiogram_dialog import Dialog, Window
-from aiogram_dialog.widgets.text import Format, Const
+from aiogram_dialog.widgets.text import Format
 from aiogram_dialog.widgets.input import TextInput
-from aiogram_dialog.widgets.kbd import Button, Row, Radio, Back, Next, Column, Group
+from aiogram_dialog.widgets.kbd import Button, Row, Radio, Back, Next, Column
 
 from dialogs.dialogs_states import InitStates, PreSettingsStates, WorkStates, UserCategoriesStates, SettingsStates
-from dialogs.dialogs_handlers import (start_handler, pre_settings_handler,
-                                      continue_with_default, continue_dialog,
-                                      set_language_default, set_currency,
-                                      lets_work_handler, set_alias_for_category, change_category_page, edit_date_period,
-                                      edit_currency_type)
+from dialogs.dialogs_handlers import (start_handler, pre_settings_handler, continue_with_default,
+                                      set_language_default, set_currency, lets_work_handler,
+                                      set_alias_for_category, change_category_page, edit_date_period,
+                                      edit_currency_type, edit_settings_param, edit_language_param, edit_currency_param,
+                                      edit_money_limit_param)
 from keyboards.kbd_builder import KeyboardBuilder
 
 starting_dialog = Dialog(
@@ -63,7 +64,7 @@ pre_settings_dialog = Dialog(
         Row(
             Button(text=Format("{button_confirm}"),
                    id="confirm_button",
-                   on_click=set_language_default
+                   on_click=set_language_default,
                    ),
         ),
         getter=get_language_choice_win,
@@ -230,68 +231,11 @@ categories_dialog = Dialog(
                 when="show_pagination"
             ),
         ),
+        # Создание кнопок отображения временных периодов
         KeyboardBuilder.from_enum(ExpensesEnum, handler=edit_date_period, width=3,
-                                  enum_value=False, when="show_periods", postfix="_button")
-        # Group(
-        #     Button(
-        #         Format("{day_button}"),
-        #         id=ExpensesEnum.day.name,
-        #         on_click=edit_date_period
-        #     ),
-        #     Button(
-        #         Format("{week_button}"),
-        #         id=ExpensesEnum.week.name,
-        #         on_click=edit_date_period
-        #     ),
-        #     Button(
-        #         Format("{month_button}"),
-        #         id=ExpensesEnum.month.name,
-        #         on_click=edit_date_period
-        #     ),
-        #     Button(
-        #         Format("{quarter_button}"),
-        #         id=ExpensesEnum.quarter.name,
-        #         on_click=edit_date_period
-        #     ),
-        #     Button(
-        #         Format("{half_year_button}"),
-        #         id=ExpensesEnum.half_year.name,
-        #         on_click=edit_date_period
-        #     ),
-        #     Button(
-        #         Format("{year_button}"),
-        #         id=ExpensesEnum.year.name,
-        #         on_click=edit_date_period
-        #     ),
-        #     width=3,
-        #     when="show_periods"
-        # ),
-        ,
+                                  enum_value=False, when="show_periods", postfix="_button"),
+        # Создание кнопок отображения типов валют
         KeyboardBuilder.from_enum(MonetaryCurrenciesEnum, edit_currency_type, when="show_currencies"),
-        # Group(
-        #     Button(
-        #         Format("{byn}"),
-        #         id=MonetaryCurrenciesEnum.byn.value,
-        #         on_click=edit_currency_type
-        #     ),
-        #     Button(
-        #         Format("{usd}"),
-        #         id=MonetaryCurrenciesEnum.usd.value,
-        #         on_click=edit_currency_type
-        #     ),
-        #     Button(
-        #         Format("{rub}"),
-        #         id=MonetaryCurrenciesEnum.rub.value,
-        #         on_click=edit_currency_type
-        #     ),
-        #     Button(
-        #         Format("{eur}"),
-        #         id=MonetaryCurrenciesEnum.eur.value,
-        #         on_click=edit_currency_type
-        #     ),
-        #     width=4,
-        #     when="show_currencies",
-        # ),
         getter=(get_category_list, get_category_period_buttons),
         state=UserCategoriesStates.get_categories,
         parse_mode=ParseMode.HTML,
@@ -301,9 +245,69 @@ categories_dialog = Dialog(
 settings_dialog = Dialog(
     Window(
         Format("{message}"),
-        Button(Const("text"), id="button", on_click=Back()),
+        KeyboardBuilder.from_enum(SettingsParamsEnum, edit_settings_param, width=1, when=SettingsParamsEnum),
+        Button(
+            Format("{confirm_button}"),
+            id="confirm_button",
+            on_click=lets_work_handler
+        ),
         getter=get_settings_params,
         state=SettingsStates.select_param,
         parse_mode=ParseMode.HTML,
     ),
+    Window(
+        Format("{message}"),
+        # KeyboardBuilder.from_enum(LanguageCodesEnum, handler=edit_language_param, width=2, when="show_buttons"),
+        Radio(
+            checked_text=Format("🔘{item[0]}"),
+            unchecked_text=Format("⚪️{item[0]}"),
+            id="radio_lang",
+            item_id_getter=lambda x: x[1],
+            items="languages",
+        ),
+        Button(
+            Format("{button_confirm}"),
+            on_click=edit_language_param,
+            id="button_confirm",
+        ),
+        # getter=get_setting_language,
+        getter=get_language_choice_win,
+        state=SettingsStates.language,
+    ),
+    Window(
+        Format("{message}"),
+        TextInput(
+            id="text_input",
+            on_error=MoneyValueInputFactory.money_value_input_error,
+            on_success=MoneyValueInputFactory.money_value_input_success,
+            type_factory=MoneyValueInputFactory.money_value_input_factory,
+        ),
+        Button(
+            Format("{button_confirm}"),
+            on_click=edit_money_limit_param,
+            id="button_confirm",
+        ),
+        getter=get_setting_money_limit,
+        state=SettingsStates.money_limit,
+        parse_mode=ParseMode.HTML
+    ),
+    Window(
+        Format("{message}"),
+        Radio(
+            checked_text=Format("🔘{item[0]}"),
+            unchecked_text=Format("⚪️{item[0]}"),
+            id="radio_curr",
+            item_id_getter=lambda x: x[1],
+            items="currency",
+        ),
+        Button(
+            Format("{button_confirm}"),
+            on_click=edit_currency_param,
+            id="button_confirm"
+        ),
+        # getter=get_setting_money_currency,
+        getter=get_currency_choice_win,
+        state=SettingsStates.currency,
+        parse_mode=ParseMode.HTML
+    )
 )

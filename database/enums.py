@@ -46,4 +46,6 @@ class TimeIntervalsEnum(BaseFormatter):
 
 
 class SettingsParamsEnum(BaseFormatter):
-    pass
+    language = "language"
+    money_limit = "money_limit"
+    default_currency = "monetary_currency"
