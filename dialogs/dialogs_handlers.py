@@ -1,16 +1,21 @@
+from datetime import datetime
+
 from aiogram.types import CallbackQuery
-from aiogram_dialog.widgets.kbd import Button, ManagedRadio
+from aiogram_dialog.widgets.kbd import Button, ManagedRadio, ManagedMultiselect
 from aiogram_dialog.manager.manager import DialogManager
 from fluentogram import TranslatorRunner
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from database.enums import ExpensesEnum, MonetaryCurrenciesEnum, SettingsParamsEnum
-from database.requests import AliasDBRequests, SettingsDBRequests
-from dialogs.dialogs_states import PreSettingsStates, WorkStates, SettingsStates
+from database.requests import AliasDBRequests, SettingsDBRequests, CategoryDBRequests
+from dialogs.dialogs_states import PreSettingsStates, WorkStates, SettingsStates, UserCategoriesStates
 from services.check_actually_currencies import get_valid_expenses
-from validation.db_models import CategoryDTO, ValidCategoryModel
+from validation.db_models import CategoryDTO, ValidCategoryModel, ValidSettingsParams
 
 
 async def start_handler(callback: CallbackQuery, button: Button, dialog_manager: DialogManager):
+    if "msgs_to_del" in dialog_manager.start_data:
+        dialog_manager.start_data["msgs_to_del"].append(callback.message.message_id)
     await dialog_manager.next()
 
 
@@ -58,9 +63,13 @@ async def lets_work_handler(callback: CallbackQuery, button: Button, dialog_mana
     language_code = dialog_manager.dialog_data.get("language_code")
     currency_type = dialog_manager.dialog_data.get("currency_type")
 
-    await SettingsDBRequests.update_params(session_maker=db_session, user_id=callback.from_user.id,
-                                           money_limits=money_value, language_code=language_code,
-                                           monetary_currency=currency_type)
+    if money_value and language_code and currency_type:
+        await SettingsDBRequests.update_params(session_maker=db_session, user_id=callback.from_user.id,
+                                               money_limits=money_value, language_code=language_code,
+                                               monetary_currency=currency_type)
+
+    if "msgs_to_del" in dialog_manager.dialog_data:
+        dialog_manager.dialog_data["msgs_to_del"].append(callback.message.message_id)
 
     await dialog_manager.done()
     await dialog_manager.start(WorkStates.add_category, data={"language_code": language_code})
@@ -123,14 +132,29 @@ async def edit_currency_type(callback: CallbackQuery, button: Button, dialog_man
     await callback.answer()
 
 
+async def edit_categories(callback: CallbackQuery, button: Button, dialog_manager: DialogManager, **kwargs):
+    await dialog_manager.switch_to(UserCategoriesStates.edit_categories)
+
+
+async def delete_selected_categories(callback: CallbackQuery, button: Button, dialog_manager: DialogManager, **kwargs):
+    db_session: async_sessionmaker = dialog_manager.start_data.get("db_session")
+    ids: ManagedMultiselect = dialog_manager.find("multi_categories")
+    await CategoryDBRequests.delete_category(session_maker=db_session, category_id=ids.get_checked())
+    await dialog_manager.back()
+
+
 async def edit_settings_param(callback: CallbackQuery, button: Button, dialog_manager: DialogManager):
-    db_session = dialog_manager.dialog_data.get("db_session")
-    user_settings = await SettingsDBRequests.get_params(db_session, callback.from_user.id)
+    if "msgs_to_del" in dialog_manager.start_data:
+        dialog_manager.start_data["msgs_to_del"].append(callback.message.message_id)
+
+    current_month = datetime.now().month
+    user_settings: ValidSettingsParams = dialog_manager.dialog_data.get("user_settings")
 
     dialog_manager.dialog_data.setdefault("language_code", user_settings.language_code)
     dialog_manager.dialog_data.setdefault("currency_type", user_settings.monetary_currency)
-    dialog_manager.dialog_data.setdefault("money_value", tuple(user_settings.money_limits.values())[-1])
+    dialog_manager.dialog_data.setdefault("money_value", user_settings.money_limits.get(current_month, 1))
 
+    await callback.answer(button.widget_id)
     match button.widget_id:
         case SettingsParamsEnum.language.value:
             await dialog_manager.switch_to(SettingsStates.language)
@@ -138,7 +162,6 @@ async def edit_settings_param(callback: CallbackQuery, button: Button, dialog_ma
             await dialog_manager.switch_to(SettingsStates.money_limit)
         case SettingsParamsEnum.default_currency.name:
             await dialog_manager.switch_to(SettingsStates.currency)
-    await callback.answer(button.widget_id)
 
 
 async def edit_language_param(callback: CallbackQuery, button: Button, dialog_manager: DialogManager):

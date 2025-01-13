@@ -31,6 +31,7 @@ message-categories_menu_point = { $number }. { $category } - <b>{ $amount }</b> 
 message-money_indicator = Общие/ожидаемые затраты: <b><u>{ $total_money_value }/{ $expected_costs} <i>{ $money_currency}</i></u></b>
 
 message-settings_menu = Параметры настроек:
+message-settings_delete = Удалить категорию:
 
 button-start = Начнём!
 button-pre_settings = Перейти к настройкам
@@ -40,6 +41,7 @@ button-back = Вернуться
 
 button-currency = 💸
 button-period = 📅
+button-editor = ✏️
 
 button-pagination_next = ➡️
 button-pagination_back = ⬅️

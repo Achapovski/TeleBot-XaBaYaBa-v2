@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from aiogram import Bot
-from aiogram.types import User, Update
+from aiogram.types import User
 from aiogram_dialog.manager.manager import DialogManager
 from aiogram_dialog.widgets.input import ManagedTextInput
 from aiogram_dialog.widgets.kbd import ManagedRadio
@@ -15,11 +15,14 @@ from database.requests import UserDBRequests, SettingsDBRequests
 from keyboards.main_menu import load_bot_command_menu
 from services.categories_handler import compute_money_value_with_timestamps, compute_expected_costs
 from services.check_actually_currencies import get_valid_expenses
-from validation.db_models import ValidCategoryModel, ValidSettingsParams, ValidSettingsModel
+from validation.db_models import ValidCategoryModel, ValidSettingsParams, CategoryDTO
 
 
 async def get_message_start_win(dialog_manager: DialogManager, event_from_user: User,
-                                i18n: TranslatorRunner, bot: Bot, db_session: async_sessionmaker, **kwargs):
+                                i18n: TranslatorRunner, bot: Bot, msgs_to_del: list, **kwargs):
+    if len(msgs_to_del) > 2:
+        await bot.delete_messages(chat_id=event_from_user.id, message_ids=msgs_to_del[:-1])
+
     username = event_from_user.username if event_from_user.username else event_from_user.first_name
     message = i18n.get("message-start", username=username)
     button_start = i18n.get("button-start")
@@ -108,8 +111,11 @@ async def get_default_money_value_win(dialog_manager: DialogManager, _translator
             "success_message": success_message, "button_confirm": button_confirm, "button_back": button_back}
 
 
-async def lets_work(dialog_manager: DialogManager, _translator_hub: TranslatorHub,
-                    db_session: async_sessionmaker, i18n: TranslatorRunner, **kwargs):
+async def lets_work(dialog_manager: DialogManager, _translator_hub: TranslatorHub, bot: Bot, event_from_user: User,
+                    db_session: async_sessionmaker, i18n: TranslatorRunner, msgs_to_del: list, **kwargs):
+    if len(msgs_to_del) > 2:
+        await bot.delete_messages(chat_id=event_from_user.id, message_ids=msgs_to_del[:-1])
+
     # Определяем два варианта определения языковой модели: Через настройку пользователя (один контекст) через мидлварь
     if dialog_manager.start_data:
         language_code = dialog_manager.start_data.get("language_code")
@@ -119,11 +125,16 @@ async def lets_work(dialog_manager: DialogManager, _translator_hub: TranslatorHu
 
     # Добавляем db_session в контекст рабочего диалога, чтобы воспользоваться сессией в фабриках диалогов
     dialog_manager.dialog_data["db_session"] = db_session
+    dialog_manager.dialog_data.update({"db_session": db_session, "message_to_del": msgs_to_del})
     return {"message": message}
 
 
-async def get_user_categories(dialog_manager: DialogManager, i18n: TranslatorRunner,
-                              db_session: async_sessionmaker, event_from_user: User, **kwargs):
+async def get_user_categories(dialog_manager: DialogManager, i18n: TranslatorRunner, db_session: async_sessionmaker,
+                              event_from_user: User, msgs_to_del: list, bot: Bot, **kwargs):
+    print(msgs_to_del)
+    if len(msgs_to_del) > 2:
+        await bot.delete_messages(chat_id=event_from_user.id, message_ids=msgs_to_del[:-1])
+
     radio: ManagedRadio = dialog_manager.find("radio_categories")
     categories: list[ValidCategoryModel] = await UserDBRequests.get_categories(session_maker=db_session,
                                                                                user_id=event_from_user.id)
@@ -161,12 +172,15 @@ async def confirm_category_alias(dialog_manager: DialogManager, i18n: Translator
     return {"message": message, "button_back": button_back, "button_confirm": button_confirm}
 
 
-async def get_category_list(dialog_manager: DialogManager, i18n: TranslatorRunner,
-                            db_session: async_sessionmaker, event_update: Update, event_from_user: User, **kwargs):
+async def get_category_list(dialog_manager: DialogManager, i18n: TranslatorRunner, db_session: async_sessionmaker,
+                            event_from_user: User, bot: Bot, msgs_to_del: list, **kwargs):
+    if len(msgs_to_del) > 2:
+        await bot.delete_messages(chat_id=event_from_user.id, message_ids=msgs_to_del[:-1])
     dialog_data = dialog_manager.current_context().dialog_data
     categories: list[ValidCategoryModel] = await UserDBRequests.get_categories(session_maker=db_session,
                                                                                user_id=event_from_user.id)
-    settings: ValidSettingsParams = await SettingsDBRequests.get_params(session_maker=db_session, user_id=event_from_user.id)
+    settings: ValidSettingsParams = await SettingsDBRequests.get_params(session_maker=db_session,
+                                                                        user_id=event_from_user.id)
     dialog_data.setdefault("default_currency", str(settings.monetary_currency))
 
     page = dialog_data.get("page", 0)
@@ -202,16 +216,27 @@ async def get_category_list(dialog_manager: DialogManager, i18n: TranslatorRunne
 
     button_next_text = i18n.button.pagination_next()
     button_back_text = i18n.button.pagination_back()
-    button_info_text = f"{page + 1}/{page_num}"
+    button_info_text = f"{page + 1}/{page_num} ✏️"
     button_currencies_text = i18n.button.currency()
     button_calendar_text = i18n.button.period()
+    button_editor = i18n.button.editor()
 
     currencies = {key.name: key.value for key in MonetaryCurrenciesEnum}
 
     return {"message": text, "button_next": button_next_text, "button_info": button_info_text,
             "button_back": button_back_text, "button_calendar": button_calendar_text,
             "button_currencies": button_currencies_text, "show_pagination": show_pagination,
-            "show_periods": show_periods, "show_currencies": show_currencies, **currencies}
+            "show_periods": show_periods, "show_currencies": show_currencies, "button_editor": button_editor,
+            "hide_pagination": not show_pagination, **currencies}
+
+
+async def get_category_editor(dialog_manager: DialogManager, i18n: TranslatorRunner, db_session: async_sessionmaker,
+                              event_from_user: User, **kwargs):
+    message = i18n.message.settings_delete()
+    categories: list[CategoryDTO] = dialog_manager.dialog_data.get("categories")
+    category_buttons = ((category.id, category.title) for category in categories)
+    button_confirm = i18n.button.confirm()
+    return {"message": message, "categories": tuple(category_buttons), "button_confirm": button_confirm}
 
 
 async def get_category_period_buttons(dialog_manager: DialogManager, i18n: TranslatorRunner, **kwargs):
@@ -228,12 +253,10 @@ async def get_setting_language(dialog_manager: DialogManager, i18n: TranslatorRu
     return {"message": message, "button_confirm": button_confirm}
 
 
-async def get_setting_money_limit(dialog_manager: DialogManager, i18n: TranslatorRunner,
-                                  db_session: async_sessionmaker, **kwargs):
+async def get_setting_money_limit(dialog_manager: DialogManager, _translator_hub: TranslatorHub, **kwargs):
+    i18n = _translator_hub.get_translator_by_locale(dialog_manager.dialog_data.get("language_code"))
     user_settings: ValidSettingsParams = dialog_manager.start_data.get("user_settings")
-    last_money_limit = tuple(user_settings.money_limits.values())[-1]
-    current_money_value = dialog_manager.dialog_data.get("money_value", last_money_limit)
-
+    current_money_value = dialog_manager.dialog_data.get("money_value", dialog_manager.start_data.get("money_value"))
     message = i18n.message.confirm_money_value(money_value=current_money_value,
                                                currency=user_settings.monetary_currency)
     button_confirm = i18n.button.confirm()
@@ -247,18 +270,19 @@ async def get_setting_money_currency(dialog_manager: DialogManager, i18n: Transl
     return {"message": message, "button_confirm": button_confirm}
 
 
-async def get_settings_params(dialog_manager: DialogManager, db_session: async_sessionmaker,
-                              _translator_hub: TranslatorHub, **kwargs):
+async def get_settings_params(dialog_manager: DialogManager, db_session: async_sessionmaker, event_from_user: User,
+                              _translator_hub: TranslatorHub, bot: Bot, msgs_to_del: list, **kwargs):
+    if len(msgs_to_del) > 2:
+        await bot.delete_messages(chat_id=event_from_user.id, message_ids=msgs_to_del[:-1])
+
+    dialog_manager.dialog_data["user_settings"] = await SettingsDBRequests.get_params(db_session, event_from_user.id)
+
     standard_language_code = dialog_manager.start_data.get("language_code")
     new_language_code = dialog_manager.dialog_data.get("language_code", standard_language_code)
     i18n = _translator_hub.get_translator_by_locale(new_language_code)
-    dialog_manager.dialog_data["db_session"] = db_session
 
     message = i18n.message.settings_menu()
     confirm_button = i18n.button.confirm()
+
     data = {element.name: i18n.get(f"setting-{element.value}") for element in SettingsParamsEnum}
-
     return {"message": message, "confirm_button": confirm_button, **data}
-
-
-

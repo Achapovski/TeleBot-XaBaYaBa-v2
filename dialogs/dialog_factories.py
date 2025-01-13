@@ -1,16 +1,11 @@
-from decimal import Decimal
 from logging import getLogger
 
 from aiogram.types import Message
 from aiogram_dialog import DialogManager
 from aiogram_dialog.widgets.input import ManagedTextInput
-from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from custom_types.types import DefaultMoneyUnit
 from database.enums import ExpensesEnum
-from database.models import User, Alias, Category
-from database.requests import UserDBRequests, CategoryDBRequests, AliasDBRequests
-from services.fuzzy_comparison import find_most_similar_options
+from database.requests import CategoryDBRequests, AliasDBRequests
 from services.user_message_handler import define_money_unit, define_category_unit
 
 logger = getLogger(__name__)
@@ -28,8 +23,6 @@ class MoneyValueInputFactory:
                                         dialog_manager: DialogManager, *args, **kwargs):
         money_value = define_money_unit(message.text)
         dialog_manager.current_context().dialog_data["money_value"] = money_value.__str__()
-        # if dialog_manager.start_data.get("is_settings"):
-        #     await dialog_manager.done()
 
     @staticmethod
     async def money_value_input_error(message: Message, widget: ManagedTextInput,
@@ -63,6 +56,8 @@ class CategoryProcessingFactory:
     @classmethod
     async def user_category_money_success(cls, message: Message, widget: ManagedTextInput | None,
                                           dialog_manager: DialogManager, *args, **kwargs):
+
+        dialog_manager.dialog_data["message_to_del"].append(message.message_id)
 
         db_session = dialog_manager.dialog_data.get("db_session") \
             if not kwargs.get("db_session") \

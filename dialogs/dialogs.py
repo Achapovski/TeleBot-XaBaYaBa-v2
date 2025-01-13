@@ -1,25 +1,24 @@
 from aiogram.enums import ParseMode
 
-from database.enums import ExpensesEnum, MonetaryCurrenciesEnum, SettingsParamsEnum, LanguageCodesEnum
+from database.enums import ExpensesEnum, MonetaryCurrenciesEnum, SettingsParamsEnum
 from dialogs.dialogs_getters import (get_message_start_win, get_pre_settings_win,
                                      get_language_choice_win, get_currency_choice_win,
                                      get_default_money_value_win, lets_work, get_user_categories, get_category_alias,
                                      confirm_category_alias, get_category_list, get_category_period_buttons,
-                                     get_settings_params, get_setting_language, get_setting_money_currency,
-                                     get_setting_money_limit)
+                                     get_settings_params, get_setting_money_limit, get_category_editor)
 from dialogs.dialog_factories import MoneyValueInputFactory, CategoryProcessingFactory, AliasProcessingFactory
 
 from aiogram_dialog import Dialog, Window
 from aiogram_dialog.widgets.text import Format
 from aiogram_dialog.widgets.input import TextInput
-from aiogram_dialog.widgets.kbd import Button, Row, Radio, Back, Next, Column
+from aiogram_dialog.widgets.kbd import Button, Row, Radio, Back, Next, Column, Multiselect
 
 from dialogs.dialogs_states import InitStates, PreSettingsStates, WorkStates, UserCategoriesStates, SettingsStates
 from dialogs.dialogs_handlers import (start_handler, pre_settings_handler, continue_with_default,
                                       set_language_default, set_currency, lets_work_handler,
                                       set_alias_for_category, change_category_page, edit_date_period,
                                       edit_currency_type, edit_settings_param, edit_language_param, edit_currency_param,
-                                      edit_money_limit_param)
+                                      edit_money_limit_param, edit_categories, delete_selected_categories)
 from keyboards.kbd_builder import KeyboardBuilder
 
 starting_dialog = Dialog(
@@ -215,7 +214,14 @@ categories_dialog = Dialog(
                 id="button_calendar",
             ),
             Button(
+                Format("{button_editor}"),
+                on_click=edit_categories,
+                id="button_editor",
+                when="hide_pagination"
+            ),
+            Button(
                 Format("{button_info}"),
+                on_click=edit_categories,
                 id="button_info",
                 when="show_pagination"
             ),
@@ -238,7 +244,27 @@ categories_dialog = Dialog(
         KeyboardBuilder.from_enum(MonetaryCurrenciesEnum, edit_currency_type, when="show_currencies"),
         getter=(get_category_list, get_category_period_buttons),
         state=UserCategoriesStates.get_categories,
-        parse_mode=ParseMode.HTML,
+        parse_mode=ParseMode.HTML
+    ),
+    Window(
+        Format("{message}"),
+        Column(
+            Multiselect(
+                checked_text=Format("{item[1]} [ ❌ ]"),
+                unchecked_text=Format("{item[1]} [" + f"\n"*8 + "]"),
+                id="multi_categories",
+                items="categories",
+                item_id_getter=lambda item: item[0],
+            ),
+        ),
+        Button(
+            Format("{button_confirm}"),
+            id="button_confirm",
+            on_click=delete_selected_categories
+        ),
+        getter=get_category_editor,
+        state=UserCategoriesStates.get_categories,
+        parse_mode=ParseMode.HTML
     ),
 )
 
@@ -305,7 +331,6 @@ settings_dialog = Dialog(
             on_click=edit_currency_param,
             id="button_confirm"
         ),
-        # getter=get_setting_money_currency,
         getter=get_currency_choice_win,
         state=SettingsStates.currency,
         parse_mode=ParseMode.HTML
